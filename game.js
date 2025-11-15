@@ -102,6 +102,8 @@ const stateManager = {
                 break;
             case GameStates.PLAYING:
                 console.log('Entered PLAYING state');
+                // Initialize snake when entering PLAYING state
+                initSnake();
                 break;
             case GameStates.PAUSED:
                 console.log('Entered PAUSED state');
@@ -133,6 +135,109 @@ const stateManager = {
         }
     }
 };
+
+// ============================================================================
+// SNAKE DATA STRUCTURE
+// ============================================================================
+
+/**
+ * Snake Object
+ * Stores the snake's position, direction, and state
+ */
+const snake = {
+    segments: [],                    // Array of {x, y} coordinates
+    direction: {x: 1, y: 0},        // Current direction (right)
+    nextDirection: {x: 1, y: 0},    // Queued direction
+    growing: false                   // Growth flag
+};
+
+/**
+ * Input Queue
+ * Prevents multiple direction changes per game tick
+ */
+const inputQueue = [];
+
+/**
+ * Initialize snake at center of grid
+ */
+function initSnake() {
+    const centerX = Math.floor(GRID_SIZE / 2);
+    const centerY = Math.floor(GRID_SIZE / 2);
+
+    snake.segments = [
+        {x: centerX, y: centerY},       // head
+        {x: centerX - 1, y: centerY},   // body
+        {x: centerX - 2, y: centerY}    // tail
+    ];
+    snake.direction = {x: 1, y: 0};  // moving right
+    snake.nextDirection = {x: 1, y: 0};
+    snake.growing = false;
+
+    // Clear input queue
+    inputQueue.length = 0;
+
+    console.log('✓ Snake initialized at center:', snake.segments[0]);
+}
+
+/**
+ * Move snake one step in current direction
+ */
+function moveSnake() {
+    // Process input queue (take first queued direction)
+    if (inputQueue.length > 0) {
+        snake.nextDirection = inputQueue.shift();
+    }
+
+    // Update current direction
+    snake.direction = snake.nextDirection;
+
+    // Calculate new head position
+    const head = snake.segments[0];
+    const newHead = {
+        x: head.x + snake.direction.x,
+        y: head.y + snake.direction.y
+    };
+
+    // Add new head at the front
+    snake.segments.unshift(newHead);
+
+    // Remove tail (unless growing)
+    if (!snake.growing) {
+        snake.segments.pop();
+    } else {
+        snake.growing = false;
+    }
+}
+
+/**
+ * Grow the snake by one segment
+ */
+function growSnake() {
+    snake.growing = true;
+}
+
+/**
+ * Check if a direction change is valid (prevent reversing)
+ * @param {object} newDirection - The new direction {x, y}
+ * @returns {boolean} True if direction change is valid
+ */
+function isValidDirection(newDirection) {
+    const currentDir = snake.direction;
+
+    // Prevent reversing direction (e.g., can't go left when moving right)
+    return !(newDirection.x === -currentDir.x && newDirection.y === -currentDir.y);
+}
+
+/**
+ * Queue a direction change
+ * @param {object} direction - Direction to queue {x, y}
+ */
+function queueDirection(direction) {
+    // Only queue if valid and queue isn't full
+    if (isValidDirection(direction) && inputQueue.length < 2) {
+        inputQueue.push(direction);
+    }
+}
 
 // ============================================================================
 // GAME LOOP VARIABLES
@@ -168,11 +273,13 @@ function update() {
 
 /**
  * Update game logic during PLAYING state
- * Placeholder for future implementation (snake movement, collision, etc.)
  */
 function updateGameLogic() {
-    // Placeholder - will be implemented in future tasks
-    // This is where snake movement, collision detection, etc. will go
+    // Move the snake
+    moveSnake();
+
+    // Collision detection will be added in next task
+    // Food generation will be added in next task
 }
 
 // ============================================================================
@@ -228,16 +335,48 @@ function renderStartScreen() {
 }
 
 /**
- * Render the game (placeholder)
- * Will be fully implemented in rendering task
+ * Render the snake
+ */
+function drawSnake() {
+    snake.segments.forEach((segment, index) => {
+        const isHead = index === 0;
+        ctx.fillStyle = isHead ? COLORS.snakeHead : COLORS.snakeBody;
+
+        // Draw segment as filled rectangle
+        ctx.fillRect(
+            segment.x * CELL_SIZE,
+            segment.y * CELL_SIZE,
+            CELL_SIZE - 1, // -1 for pixel art gap
+            CELL_SIZE - 1
+        );
+
+        // Optional: Add border for pixel art effect
+        if (isHead) {
+            ctx.strokeStyle = '#009922';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(
+                segment.x * CELL_SIZE,
+                segment.y * CELL_SIZE,
+                CELL_SIZE - 1,
+                CELL_SIZE - 1
+            );
+        }
+    });
+}
+
+/**
+ * Render the game
  */
 function renderGame() {
-    // Placeholder - will be implemented in future tasks
+    // Draw the snake
+    drawSnake();
+
+    // Draw debug info
     ctx.fillStyle = COLORS.text;
     ctx.font = '16px monospace';
     ctx.textAlign = 'left';
-    ctx.fillText('Game View (to be implemented)', 10, 30);
-    ctx.fillText(`State: ${stateManager.currentState}`, 10, 50);
+    ctx.fillText(`Length: ${snake.segments.length}`, 10, 30);
+    ctx.fillText(`Direction: (${snake.direction.x}, ${snake.direction.y})`, 10, 50);
 }
 
 /**
@@ -326,7 +465,7 @@ function stopGameLoop() {
 }
 
 // ============================================================================
-// INPUT HANDLING (Basic state transitions for testing)
+// INPUT HANDLING
 // ============================================================================
 
 /**
@@ -349,12 +488,20 @@ function handleKeyPress(event) {
             break;
 
         case GameStates.PLAYING:
-            if (key === ' ') {
+            // Handle arrow keys
+            if (key === 'ArrowUp') {
+                queueDirection({x: 0, y: -1});
+            } else if (key === 'ArrowDown') {
+                queueDirection({x: 0, y: 1});
+            } else if (key === 'ArrowLeft') {
+                queueDirection({x: -1, y: 0});
+            } else if (key === 'ArrowRight') {
+                queueDirection({x: 1, y: 0});
+            } else if (key === ' ') {
                 stateManager.transition(GameStates.PAUSED);
             } else if (key === 'Escape') {
                 stateManager.transition(GameStates.START);
             }
-            // Arrow keys will be handled in snake movement task
             break;
 
         case GameStates.PAUSED:
