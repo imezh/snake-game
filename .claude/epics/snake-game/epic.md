@@ -2,9 +2,10 @@
 name: snake-game
 status: backlog
 created: 2025-11-15T16:15:33Z
+updated: 2025-11-15T16:48:09Z
 progress: 0%
 prd: .claude/prds/snake-game.md
-github: null
+github: https://github.com/imezh/snake-game/issues/1
 ---
 
 # Epic: snake-game
