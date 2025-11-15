@@ -102,8 +102,10 @@ const stateManager = {
                 break;
             case GameStates.PLAYING:
                 console.log('Entered PLAYING state');
-                // Initialize snake when entering PLAYING state
+                // Initialize game when entering PLAYING state
+                score = 0;
                 initSnake();
+                generateFood();
                 break;
             case GameStates.PAUSED:
                 console.log('Entered PAUSED state');
@@ -240,6 +242,148 @@ function queueDirection(direction) {
 }
 
 // ============================================================================
+// FOOD SYSTEM
+// ============================================================================
+
+/**
+ * Food Object
+ * Stores the current food position
+ */
+let food = null;
+
+/**
+ * Score Tracking
+ */
+let score = 0;
+
+/**
+ * Generate food at random valid position
+ * Ensures food never spawns on snake body
+ */
+function generateFood() {
+    let newFood;
+    let validPosition = false;
+    let attempts = 0;
+    const maxAttempts = 1000; // Prevent infinite loop
+
+    while (!validPosition && attempts < maxAttempts) {
+        newFood = {
+            x: Math.floor(Math.random() * GRID_SIZE),
+            y: Math.floor(Math.random() * GRID_SIZE)
+        };
+
+        // Check if food position is on snake
+        validPosition = !isOnSnake(newFood);
+        attempts++;
+    }
+
+    if (validPosition) {
+        food = newFood;
+        console.log('✓ Food generated at:', food);
+    } else {
+        console.warn('Failed to generate food - grid may be full');
+    }
+}
+
+/**
+ * Check if a position is occupied by snake
+ * @param {object} position - Position to check {x, y}
+ * @returns {boolean} True if position is on snake
+ */
+function isOnSnake(position) {
+    return snake.segments.some(segment =>
+        segment.x === position.x && segment.y === position.y
+    );
+}
+
+/**
+ * Check if snake head collides with food
+ */
+function checkFoodCollision() {
+    if (!food) return;
+
+    const head = snake.segments[0];
+
+    if (head.x === food.x && head.y === food.y) {
+        consumeFood();
+    }
+}
+
+/**
+ * Handle food consumption
+ * Increases score, grows snake, generates new food
+ */
+function consumeFood() {
+    score += 10;
+    growSnake();
+    generateFood();
+    console.log(`✓ Food consumed! Score: ${score}`);
+}
+
+// ============================================================================
+// COLLISION DETECTION
+// ============================================================================
+
+/**
+ * Check if snake head hits wall
+ * @returns {boolean} True if wall collision detected
+ */
+function checkWallCollision() {
+    const head = snake.segments[0];
+
+    return (
+        head.x < 0 ||
+        head.x >= GRID_SIZE ||
+        head.y < 0 ||
+        head.y >= GRID_SIZE
+    );
+}
+
+/**
+ * Check if snake head hits its own body
+ * @returns {boolean} True if self-collision detected
+ */
+function checkSelfCollision() {
+    const head = snake.segments[0];
+
+    // Check if head collides with any body segment (skip head itself at index 0)
+    for (let i = 1; i < snake.segments.length; i++) {
+        if (head.x === snake.segments[i].x && head.y === snake.segments[i].y) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+/**
+ * Check all collision types
+ * Triggers game over if collision detected
+ */
+function checkCollisions() {
+    if (checkWallCollision()) {
+        console.log('✗ Wall collision detected');
+        gameOver();
+        return;
+    }
+
+    if (checkSelfCollision()) {
+        console.log('✗ Self-collision detected');
+        gameOver();
+        return;
+    }
+}
+
+/**
+ * Handle game over
+ * Transitions to GAME_OVER state
+ */
+function gameOver() {
+    console.log(`Game Over! Final Score: ${score}`);
+    stateManager.transition(GameStates.GAME_OVER);
+}
+
+// ============================================================================
 // GAME LOOP VARIABLES
 // ============================================================================
 
@@ -278,8 +422,11 @@ function updateGameLogic() {
     // Move the snake
     moveSnake();
 
-    // Collision detection will be added in next task
-    // Food generation will be added in next task
+    // Check for food collision and consumption
+    checkFoodCollision();
+
+    // Check for wall and self collisions
+    checkCollisions();
 }
 
 // ============================================================================
@@ -365,18 +512,48 @@ function drawSnake() {
 }
 
 /**
+ * Render the food
+ */
+function drawFood() {
+    if (!food) return;
+
+    ctx.fillStyle = COLORS.food;
+
+    // Draw food as filled circle for visual distinction
+    const centerX = food.x * CELL_SIZE + CELL_SIZE / 2;
+    const centerY = food.y * CELL_SIZE + CELL_SIZE / 2;
+    const radius = CELL_SIZE / 2 - 2;
+
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Add highlight for 3D effect
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+    ctx.beginPath();
+    ctx.arc(centerX - radius / 3, centerY - radius / 3, radius / 3, 0, Math.PI * 2);
+    ctx.fill();
+}
+
+/**
  * Render the game
  */
 function renderGame() {
     // Draw the snake
     drawSnake();
 
-    // Draw debug info
+    // Draw the food
+    drawFood();
+
+    // Draw score
     ctx.fillStyle = COLORS.text;
-    ctx.font = '16px monospace';
+    ctx.font = 'bold 20px monospace';
     ctx.textAlign = 'left';
-    ctx.fillText(`Length: ${snake.segments.length}`, 10, 30);
-    ctx.fillText(`Direction: (${snake.direction.x}, ${snake.direction.y})`, 10, 50);
+    ctx.fillText(`Score: ${score}`, 10, 30);
+
+    // Draw debug info
+    ctx.font = '14px monospace';
+    ctx.fillText(`Length: ${snake.segments.length}`, 10, 55);
 }
 
 /**
@@ -405,8 +582,11 @@ function renderGameOverScreen() {
     ctx.textAlign = 'center';
     ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 3);
 
+    ctx.font = 'bold 24px monospace';
+    ctx.fillText(`Final Score: ${score}`, canvas.width / 2, canvas.height / 2);
+
     ctx.font = '18px monospace';
-    ctx.fillText('Press SPACE to Restart', canvas.width / 2, canvas.height / 2);
+    ctx.fillText('Press SPACE to Restart', canvas.width / 2, canvas.height / 1.6);
 }
 
 // ============================================================================
